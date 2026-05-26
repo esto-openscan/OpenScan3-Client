@@ -3481,15 +3481,18 @@ async function saveLightSettings(name: string) {
         pwmLight?: (options: {
           client?: unknown
           path: { light_name: string }
-          body: { value: number }
+          query: { value: number }
+          throwOnError?: boolean
         }) => Promise<unknown>
       }).pwmLight
 
       if (typeof pwmLightFn === 'function') {
+        const intensity = clampLightIntensity(form.intensity)
         await pwmLightFn({
           client: apiClient,
           path: { light_name: name },
-          body: { value: clampLightIntensity(form.intensity) }
+          query: { value: intensity },
+          throwOnError: true
         })
       }
     }
@@ -3790,9 +3793,11 @@ watch(
     })
 
     Object.entries(current).forEach(([name, status]) => {
+      const runtimeIntensity = (status as { value?: number | null } | null | undefined)?.value
+      const fallbackIntensity = lightForms[name]?.intensity
       const mapped = mapLightConfig(
         status?.settings,
-        (status as { value?: number | null } | null | undefined)?.value
+        runtimeIntensity ?? fallbackIntensity
       )
       if (!(name in lightForms) || lightFormDirty[name] !== true) {
         lightForms[name] = mapped
