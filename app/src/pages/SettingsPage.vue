@@ -1009,7 +1009,7 @@
                         </BaseButtonSecondary>
                         <BaseButtonSecondary
                           v-if="isNextApiTarget"
-                          icon="description"
+                          icon="download"
                           label="Camera report"
                           :loading="cameraReportDownloadLoading"
                           :disable="cameraReportDownloadLoading"
@@ -1263,7 +1263,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { apiClient, buildApiUrl, getApiSdk, resolveApiTarget, updateApiClientConfig } from 'src/services/apiClient'
+import { apiClient, getApiSdk, resolveApiTarget, updateApiClientConfig } from 'src/services/apiClient'
 import { useApiConfigStore } from 'src/stores/apiConfig'
 import { useDeviceStore } from 'src/stores/device'
 import { useCameraStore } from 'src/stores/camera'
@@ -1287,6 +1287,7 @@ import BlurredSnapshotBackground from 'components/background/BlurredSnapshotBack
 import CameraOrientationDialog from 'components/camera/CameraOrientationDialog.vue'
 import { fieldDescriptions, getFieldDescription } from 'src/generated/api/fieldDescriptions'
 import { fieldDefaults } from 'src/generated/api/fieldDefaults'
+import { downloadCameraReport } from 'src/utils/cameraReport'
 import type {
   AutoCalibrateAwbResponse,
   CameraSettings,
@@ -3951,24 +3952,7 @@ async function handleDownloadCameraReport() {
 
   cameraReportDownloadLoading.value = true
   try {
-    const response = await fetch(buildApiUrl('develop/camera-report?format=text'), {
-      cache: 'no-store'
-    })
-    if (!response.ok) {
-      throw new Error(`Camera report request failed with status ${response.status}`)
-    }
-
-    const reportText = await response.text()
-    const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = `camera-report-${timestamp}.txt`
-    document.body.appendChild(anchor)
-    anchor.click()
-    document.body.removeChild(anchor)
-    URL.revokeObjectURL(url)
+    await downloadCameraReport()
   } catch (error) {
     console.error('Camera report could not be downloaded.', error)
   } finally {
