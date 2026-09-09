@@ -250,6 +250,41 @@
         </template>
           </BaseWizard>
           <BaseDialog
+            v-model="noCameraDialogVisible"
+            title="No camera found"
+            persistent
+            width="min(92vw, 560px)"
+            card-class="no-camera-dialog"
+          >
+            <q-card-section>
+              <p class="text-body1 q-mb-md">
+                OpenScan could not detect a camera when the setup wizard started.
+              </p>
+              <div class="text-subtitle2 q-mb-sm">Please check the camera cable:</div>
+              <ul class="no-camera-dialog__tips q-mb-md">
+                <li>Make sure the contact surfaces of the camera ribbon are oriented correctly.</li>
+                <li>Push the connectors firmly into place on both ends.</li>
+                <li>Make sure the correct OpenScan3 image for your camera model is flashed.</li>
+              </ul>
+              <p class="text-body2 text-grey-7 q-mb-none">
+                If the camera is still not detected, download a camera report and include it when asking for support.
+              </p>
+            </q-card-section>
+            <template #actions>
+              <BaseButtonSecondary
+                icon="download"
+                label="Camera report"
+                :loading="cameraReportDownloadLoading"
+                :disable="cameraReportDownloadLoading"
+                @click="handleDownloadCameraReport"
+              />
+              <BaseButtonPrimary
+                label="Continue anyway"
+                @click="noCameraDialogVisible = false"
+              />
+            </template>
+          </BaseDialog>
+          <BaseDialog
             v-model="rotorImageDialogVisible"
             :title="rotorDialogTitle"
             width="min(90vw, 640px)"
@@ -276,7 +311,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useQuasar } from 'quasar'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import BasePage from 'components/base/BasePage.vue'
 import BaseWizard from 'components/base/BaseWizard.vue'
 import BaseDialog from 'components/base/BaseDialog.vue'
@@ -297,6 +332,7 @@ import {
   type DeviceConfigRequest
 } from 'src/generated/api'
 import { apiClient, getApiSdk } from 'src/services/apiClient'
+import { downloadCameraReport } from 'src/utils/cameraReport'
 
 const steps = [
   { id: 'connection', label: 'Model', caption: 'Select the device model.' },
@@ -310,6 +346,7 @@ const activeStepId = ref(steps[0].id)
 
 const deviceStore = useDeviceStore()
 const cameraStore = useCameraStore()
+const route = useRoute()
 const router = useRouter()
 const apiSdk = () => getApiSdk()
 
@@ -326,6 +363,11 @@ const configOptions = ref<DeviceConfigFile[]>([])
 const loadingConfigs = ref(false)
 const selectedConfigPath = ref<string | null>(null)
 const isApplyingConfig = ref(false)
+const noCameraDialogVisible = ref(false)
+const cameraReportDownloadLoading = ref(false)
+const isNoCameraSimulation = computed(
+  () => import.meta.env.DEV && route.query.simulate === 'no-camera'
+)
 
 const isConnectionStep = computed(() => activeStepId.value === 'connection')
 const isHardwareStep = computed(() => activeStepId.value === 'hardware')
@@ -492,9 +534,37 @@ async function loadConfigs() {
   }
 }
 
+async function loadCamerasForSetup() {
+  if (isNoCameraSimulation.value) {
+    noCameraDialogVisible.value = true
+    return
+  }
+
+  await cameraStore.fetchCameras()
+  if (!cameraStore.cameras.length) {
+    noCameraDialogVisible.value = true
+  }
+}
+
+async function handleDownloadCameraReport() {
+  if (cameraReportDownloadLoading.value) {
+    return
+  }
+
+  cameraReportDownloadLoading.value = true
+  try {
+    await downloadCameraReport()
+  } catch (error) {
+    console.error('Camera report could not be downloaded.', error)
+    $q.notify({ type: 'negative', message: 'Camera report could not be downloaded.' })
+  } finally {
+    cameraReportDownloadLoading.value = false
+  }
+}
+
 onMounted(() => {
   void loadConfigs()
-  void cameraStore.fetchCameras()
+  void loadCamerasForSetup()
 })
 
 async function handleNext(goNext: () => void) {
@@ -800,6 +870,14 @@ function navigateTo(path: string) {
   width: 100%;
   border-radius: 12px;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
+}
+
+.no-camera-dialog__tips {
+  padding-left: 24px;
+}
+
+.no-camera-dialog__tips li + li {
+  margin-top: 8px;
 }
 
 </style>
